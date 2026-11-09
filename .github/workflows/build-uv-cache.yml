@@ -1,0 +1,55 @@
+name: Build uv cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "uv.lock"
+      - "pyproject.toml"
+  schedule:
+    - cron: "0 0 */5 * *"  # Run every 5 days at midnight UTC to prevent cache expiration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+
+jobs:
+  build-cache:
+    name: Build cache for Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and configure Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+
+      - name: Sync all dependency groups and extras
+        run: uv sync --all-groups --all-extras --no-install-project
+
+      - name: Save uv cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-cache-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+
+      - name: Save uv managed data
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.local/share/uv
+          key: uv-data-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+
+      - name: Save project virtual environment
+        uses: actions/cache/save@v4
+        with:
+          path: .venv
+          key: uv-venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
